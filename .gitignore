@@ -1,1 +1,30 @@
-.venv
+# Python 
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data & Databases
+data/*.db
+data/*.sqlite
+data/*.csv
+data/*.xlsx
+data/raw/
+data/processed/
+
+# AI Models & Local LLM
+models/
+.ollama/
+
+# Environment Variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

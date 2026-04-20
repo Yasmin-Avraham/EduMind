@@ -9,17 +9,11 @@ def init_db():
     cursor = db_connection.cursor()
 
     ## Table: class
-    cursor.execute('''
-    CREATE TABLE IF NOT EXIST classes (
-        class_id TEXT PRIMARY KEY,
-        class_name TEXT
-    )
-    ''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS classes (class_id TEXT PRIMARY KEY,class_name TEXT)''')
 
     ## Table: students
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS students
-    (
+    CREATE TABLE IF NOT EXISTS students(
        student_id INTEGER PRIMARY KEY,
        first_name TEXT,
        last_name TEXT,
