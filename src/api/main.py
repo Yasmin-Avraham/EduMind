@@ -2,10 +2,9 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 import pandas as pd
 import sqlite3
 import io
+from src.config import DB_PATH
 
 app = FastAPI(title="EduMind API")
-
-DB_PATH = "data/edumind.db"
 
 
 @app.get("/")
