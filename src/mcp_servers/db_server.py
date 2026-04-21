@@ -56,6 +56,42 @@ def get_student_analytics (student_id: int) -> str:
         report.append(subject_summary)
     return "\n".join(report)
 
+@mcp.tool()
+def get_students(class_id: str) -> pd.DataFrame:
+    """
+    Retrieves all students for a specific class from the database.
+    Args:
+    class_id (str): The unique ID of the class.
+    """
+    query = f"SELECT * date FROM students WHERE class_id = {class_id}"
+    df = execute_query_in_db(query)
+    if df.empty:
+        return f"No students found for the class {class_id}"
+
+    return  df.to_json(orient="records", force_ascii=False)
+
+
+@mcp.tool()
+def get_class_analytics(class_id: str) -> str:
+    """
+    Intended for teachers only. Computes cross-class analytics for the entire class.
+    Args:
+        class_id: Unique ID of the class.
+    """
+    query = f"""
+        SELECT g.subject, ROUND(AVG(g.grade), 2) as avg_grade, MAX(g.grade) as max_grade
+        FROM grades g
+        JOIN students s ON g.student_id = s.student_id
+        WHERE s.class_id = '{class_id}'
+        GROUP BY g.subject
+    """
+    df = execute_query_in_db(query)
+
+    if df.empty:
+        return f"No information for class {class_id}."
+
+    return f"class analytics report ({class_id}):\n" + df.to_string(index=False)
+
 def execute_query_in_db(query:str):
     db_connection = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(query, db_connection)
