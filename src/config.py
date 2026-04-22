@@ -4,7 +4,7 @@
 DB_PATH ="data/edumind.db"
 
 # LLM definitions
-OLLAMA_MODEL = "llama3"
+OLLAMA_MODEL = "llama3.2:1b"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 #   (Guardrails)

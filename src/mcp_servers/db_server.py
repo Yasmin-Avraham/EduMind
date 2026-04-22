@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.getcwd())
 from mcp.server.fastmcp import FastMCP
 import sqlite3
 import pandas as pd
@@ -57,16 +60,16 @@ def get_student_analytics (student_id: int) -> str:
     return "\n".join(report)
 
 @mcp.tool()
-def get_students(class_id: str) -> pd.DataFrame:
+def get_students(class_id: str) -> str:
     """
     Retrieves all students for a specific class from the database.
     Args:
     class_id (str): The unique ID of the class.
     """
-    query = f"SELECT * date FROM students WHERE class_id = {class_id}"
+    query = f"SELECT *  FROM students WHERE class_id = {class_id}"
     df = execute_query_in_db(query)
     if df.empty:
-        return f"No students found for the class {class_id}"
+        return f"No students found for the class '{class_id}'"
 
     return  df.to_json(orient="records", force_ascii=False)
 
