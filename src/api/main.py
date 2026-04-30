@@ -1,18 +1,112 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 import pandas as pd
-import sqlite3
 import io
-from src.config import DB_PATH
 from fastapi import Form
+from pydantic import BaseModel
+import sqlite3
+from src.config import DB_PATH
 
 app = FastAPI(title="EduMind API")
 
+class ClassRequest(BaseModel):
+    class_id: str
+    class_name: str
 
+class StudentRequest(BaseModel):
+    student_id: int
+    first_name: str
+    last_name: str
+    class_id: str
+    parent_email: str
+    parent_phone: str
+
+class GradeRequest(BaseModel):
+    student_id: int
+    subject: str
+    grade: int
+    date: str
 @app.get("/")
 def read_root():
     return {"message": "Welcome to EduMind API"}
 
+@app.post("/admin/classes", tags=["Admin"])
+async def create_class(class_data: ClassRequest):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO classes (class_id, class_name) VALUES (?, ?)",
+            (class_data.class_id, class_data.class_name)
+        )
+        conn.commit()
+        return {"message": f"Class {class_data.class_id} created successfully"}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Class ID already exists")
+    finally:
+        conn.close()
 
+@app.post("/admin/students", tags=["Admin"])
+async def create_student(student_data: StudentRequest):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO students (student_id, first_name, last_name, class_id,parent_email,parent_phone) VALUES (?, ?, ?, ?,?,?)",
+            (student_data.student_id, student_data.first_name, student_data.last_name, student_data.class_id, student_data.parent_email, student_data.parent_phone)
+        )
+        conn.commit()
+        return {"message": f"Student {student_data.first_name} added to class {student_data.class_id}"}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Student ID already exists or Class ID not found")
+    finally:
+        conn.close()
+
+@app.post("/admin/grades", tags=["Admin"])
+async def add_grade(data: GradeRequest):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO grades (student_id, subject, grade, date) VALUES (?, ?, ?, ?)",
+            (data.student_id, data.subject, data.grade, data.date)
+        )
+        conn.commit()
+        return {"status": "success", "message": f"Grade added for student {data.student_id}"}
+    finally:
+        conn.close()
+
+
+@app.post("/admin/upload/grades_csv", tags=["Admin"])
+async def upload_grades_csv(file: UploadFile = File(...)):
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Please upload a CSV file only.")
+
+    contents = await file.read()
+    try:
+        df = pd.read_csv(io.BytesIO(contents))
+
+        required_columns = ['student_id', 'subject', 'grade', 'date']
+        if not all(col in df.columns for col in required_columns):
+            raise HTTPException(status_code=400, detail=f"The file must contain the columns: {required_columns}")
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        success_count = 0
+        for _, row in df.iterrows():
+            cursor.execute(
+                "INSERT INTO grades (student_id, subject, grade, date) VALUES (?, ?, ?, ?)",
+                (int(row['student_id']), str(row['subject']), int(row['grade']), str(row['date']))
+            )
+            success_count += 1
+
+        conn.commit()
+        return {"status": "success", "message": f"The grades uploaded successfully {success_count} "}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+    finally:
+        conn.close()
 @app.post("/upload/students")
 async def upload_students(file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
@@ -89,8 +183,7 @@ async def upload_notes(file: UploadFile = File(...)):
 async def upload_student_note_txt(
         student_id: int = Form(...),
         class_id: str = Form(...),
-        file: UploadFile = File(...)
-):
+        file: UploadFile = File(...)):
 
     if not file.filename.endswith('.txt'):
         raise HTTPException(status_code=400, detail="please upload only txt file")
@@ -119,3 +212,4 @@ async def upload_student_note_txt(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"error upload the file: {str(e)}")
+

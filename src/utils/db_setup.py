@@ -10,7 +10,6 @@ def init_db():
 
     ## Table: class
     cursor.execute('''CREATE TABLE IF NOT EXISTS classes (class_id TEXT PRIMARY KEY,class_name TEXT)''')
-
     ## Table: students
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS students(
