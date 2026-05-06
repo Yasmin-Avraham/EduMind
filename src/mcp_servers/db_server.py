@@ -1,12 +1,17 @@
 import sys
 import os
+import asyncio
+
+# Ensure the src directory is in the path
 sys.path.append(os.getcwd())
+
 from mcp.server.fastmcp import FastMCP
 import sqlite3
 import pandas as pd
 from src.config import DB_PATH
 
 mcp = FastMCP("EduData")
+
 
 @mcp.tool()
 def get_student_grades(student_id: int) -> str:
@@ -21,10 +26,11 @@ def get_student_grades(student_id: int) -> str:
     if df.empty:
         return f"No grades found for the student {student_id}"
 
-    return  df.to_json(orient="records", force_ascii=False)
+    return df.to_json(orient="records", force_ascii=False)
+
 
 @mcp.tool()
-def get_student_analytics (student_id: int) -> str:
+def get_student_analytics(student_id: int) -> str:
     """
     Calculates detailed statistical analytics for a student, grouped by subjects.
     Includes averages, min/max grades, and chronological history per subject.
@@ -59,6 +65,7 @@ def get_student_analytics (student_id: int) -> str:
         report.append(subject_summary)
     return "\n".join(report)
 
+
 @mcp.tool()
 def get_students(class_id: str) -> str:
     """
@@ -66,12 +73,12 @@ def get_students(class_id: str) -> str:
     Args:
     class_id (str): The unique ID of the class.
     """
-    query = f"SELECT *  FROM students WHERE class_id = {class_id}"
+    query = f"SELECT * FROM students WHERE class_id = '{class_id}'"
     df = execute_query_in_db(query)
     if df.empty:
         return f"No students found for the class '{class_id}'"
 
-    return  df.to_json(orient="records", force_ascii=False)
+    return df.to_json(orient="records", force_ascii=False)
 
 
 @mcp.tool()
@@ -95,11 +102,18 @@ def get_class_analytics(class_id: str) -> str:
 
     return f"class analytics report ({class_id}):\n" + df.to_string(index=False)
 
-def execute_query_in_db(query:str):
+
+def execute_query_in_db(query: str):
     db_connection = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query(query, db_connection)
-    db_connection.close()
+    try:
+        df = pd.read_sql_query(query, db_connection)
+    finally:
+        db_connection.close()
     return df
 
+
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     mcp.run()

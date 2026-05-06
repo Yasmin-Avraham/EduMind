@@ -13,6 +13,8 @@ data/*.csv
 data/*.xlsx
 data/raw/
 data/processed/
+data/chroma_db/*
+
 
 # AI Models & Local LLM
 models/

@@ -2,6 +2,8 @@
 
 import sys
 import os
+import asyncio
+
 os.environ["PYTHONUNBUFFERED"] = "1"
 sys.path.append(os.getcwd())
 from crewai import Crew
@@ -35,22 +37,28 @@ class EduMindFlow(Flow[EduState]):
             if not self.state.student_id or self.state.student_id == 0:
                 self.state.is_authorized = False
                 self.state.final_response = "So that I can help, please enter the child's ID number."
-                return self.handle_missing_info()
+                return "missing_info"
 
             if any(word in self.state.query.lower() for word in PARENT_BLOCKED_KEYWORDS):
-                return self.handle_denial()
-            return self.get_individual_data()
+                return "denied"
+
+            self.state.route_signal = "fetch_student_data"
+            return "fetch_student_data"
 
         if self.state.user_role == "teacher":
             if "class" in self.state.query.lower():
                 if not self.state.class_id:
                     self.state.final_response = "Hello teacher, please indicate which class you would like to perform the query for."
-                    return self.handle_missing_info()
-                return self.get_classroom_data()
-            return self.get_individual_data()
+                    return "missing_info"
+                self.state.route_signal = "fetch_class_data"
+                return "fetch_class_data"
+            self.state.route_signal = "fetch_student_data"
+            return "fetch_student_data"
 
-    # @listen("fetch_personal")
+    @listen(validate_and_route)
     def get_individual_data(self):
+        if self.state.route_signal != "fetch_student_data":
+            return
         print("--- DEBUG: get_individual_data triggered! ---")
         try:
             res = get_student_analytics(self.state.student_id)
@@ -62,24 +70,30 @@ class EduMindFlow(Flow[EduState]):
 
         return "data_ready"
 
-    # @listen("fetch_class")
-    def get_classroom_data(self):
+    @listen(validate_and_route)
+    def get_class_data(self):
+        if self.state.route_signal != "fetch_class_data":
+            return
         print("--- DEBUG: get_classroom_data triggered! ---")
         self.state.analysis_result = get_class_analytics(self.state.class_id)
         return "data_ready"
 
-    # @listen("denied")
+    @listen('denied')
     def handle_denial(self):
         print("--- DEBUG: handle_denial triggered! ---")
         self.state.final_response = "Access denied for privacy reasons."
         return "finished"
 
+    @listen('missing_info')
     def handle_missing_info(self):
         print("Stopping flow: Missing essential ID.")
 
-    # @listen("data_ready")
-    def generate_ai_response(self):
+    @listen(or_(get_individual_data, get_class_data))
+    async def generate_ai_response(self):
         print("--- DEBUG: generate_ai_response triggered! ---")
+        if not self.state.analysis_result:
+            self.state.final_response = "I couldn't retrieve the necessary data to answer your question."
+            return "failed"
 
         analyst = get_analyst_agent()
         communicator = get_communicator_agent()
@@ -93,20 +107,34 @@ class EduMindFlow(Flow[EduState]):
             verbose=True
         )
 
-        result = crew.kickoff()
-        self.state.final_response = str(result)
+        result = await crew.kickoff_async()
+        self.state.final_response = result.raw if hasattr(result, 'raw') else str(result)
         print("--- Flow finished successfully ---")
         return "finished"
 
 
-if __name__ == "__main__":
-    # The CRITICAL change: Pass state inside kickoff
+async def run_edu_flow():
+    print("--- Starting EduMind Simulation ---")
+
     initial_state = {
         "user_role": "parent",
-        "student_id": 1,
-        "query": "what is my childs grades"
+        "student_id": 123456789,
+        "query": "How is my child progressing in Math?"
     }
 
     flow = EduMindFlow()
-    flow.kickoff(inputs=initial_state)  # Passing inputs here
-    print(f"FINAL STATE RESPONSE: {flow.state.final_response}")
+
+    # התיקון הקריטי: משתמשים ב-kickoff_async() כי יש שלבי async ב-Flow
+    result = await flow.kickoff_async(inputs=initial_state)
+
+    print("\n" + "=" * 50)
+    # מוודאים שאנחנו מדפיסים את מה שחזר מה-AI
+    print(f"FINAL AI RESPONSE:\n{flow.state.final_response}")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    # הרצה דרך asyncio
+    import asyncio
+
+    asyncio.run(run_edu_flow())
