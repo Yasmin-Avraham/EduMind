@@ -1,12 +1,16 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import pandas as pd
 import io
 from fastapi import Form
 from pydantic import BaseModel
 import sqlite3
 from src.config import DB_PATH
-
+from typing import Optional
+import jwt
+from src.flows.edu_flow import app_graph
 app = FastAPI(title="EduMind API")
+security = HTTPBearer()
 
 class ClassRequest(BaseModel):
     class_id: str
@@ -25,6 +29,23 @@ class GradeRequest(BaseModel):
     subject: str
     grade: int
     date: str
+
+class ChatRequest(BaseModel):
+    query: str
+    student_id: Optional[int] = None
+    class_id: Optional[str] = None
+
+
+async def get_current_user_role(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Token")
+
+    try:
+        token = authorization.split(" ")[1]
+        payload = jwt.decode(token, options={"verify_signature": False})
+        return payload.get("role"), payload.get("user_id")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Token")
 @app.get("/")
 def read_root():
     return {"message": "Welcome to EduMind API"}
@@ -44,7 +65,6 @@ async def create_class(class_data: ClassRequest):
         raise HTTPException(status_code=400, detail="Class ID already exists")
     finally:
         conn.close()
-
 @app.post("/admin/students", tags=["Admin"])
 async def create_student(student_data: StudentRequest):
     conn = sqlite3.connect(DB_PATH)
@@ -60,7 +80,6 @@ async def create_student(student_data: StudentRequest):
         raise HTTPException(status_code=400, detail="Student ID already exists or Class ID not found")
     finally:
         conn.close()
-
 @app.post("/admin/grades", tags=["Admin"])
 async def add_grade(data: GradeRequest):
     conn = sqlite3.connect(DB_PATH)
@@ -74,8 +93,6 @@ async def add_grade(data: GradeRequest):
         return {"status": "success", "message": f"Grade added for student {data.student_id}"}
     finally:
         conn.close()
-
-
 @app.post("/admin/upload/grades_csv", tags=["Admin"])
 async def upload_grades_csv(file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
@@ -128,8 +145,6 @@ async def upload_students(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"error to process the file: {str(e)}")
-
-
 @app.post("/upload/grades")
 async def upload_grades(file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
@@ -151,8 +166,6 @@ async def upload_grades(file: UploadFile = File(...)):
         return {"message": f" {len(df)} grades upload successfully "}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"error to process the file: {str(e)}")
-
-
 @app.post("/upload/teacher_notes")
 async def upload_notes(file: UploadFile = File(...)):
     contents = await file.read()
@@ -177,8 +190,6 @@ async def upload_notes(file: UploadFile = File(...)):
         success_count += 1
 
     return {"message": f"Successfully indexed {success_count} notes into RAG."}
-
-
 @app.post("/upload/student_note_text")
 async def upload_student_note_txt(
         student_id: int = Form(...),
@@ -212,4 +223,37 @@ async def upload_student_note_txt(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"error upload the file: {str(e)}")
+@app.post("/chat")
+async def chat_endpoint(
+        request: ChatRequest,
+        auth: HTTPAuthorizationCredentials = Depends(security)
+    ):
+    token = auth.credentials
+    try:
+        payload = jwt.decode(token, options={"verify_signature": False})
+        role = payload.get("role")
+        user_id = payload.get("user_id")
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=401, detail="Invalid Token")
+    initial_state = {
+        "query": request.query,
+        "user_role": role,
+        "student_id": request.student_id,
+        "class_id": request.class_id,
+        "user_id": user_id,
+        "analysis_result": "",
+        "final_response": ""
+    }
+    try:
+        final_state = app_graph.invoke(initial_state)
+        print(final_state["final_response"])
+        return {"response": final_state["final_response"]}
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
 

@@ -110,7 +110,7 @@ workflow.add_edge("fetch_class", "ai_agent")
 
 workflow.add_edge("ai_agent", END)
 
-app = workflow.compile()
+app_graph = workflow.compile()
 
 
 async def main():
@@ -127,7 +127,7 @@ async def main():
         "route_signal": ""
     }
 
-    final_state = await app.ainvoke(initial_state)
+    final_state = await app_graph.ainvoke(initial_state)
 
     print("\n" + "=" * 50)
     print(f"FINAL AI RESPONSE:\n{final_state['final_response']}")
