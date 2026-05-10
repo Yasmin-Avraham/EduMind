@@ -231,7 +231,8 @@ async def chat_endpoint(
     token = auth.credentials
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        role = payload.get("role")
+        print(f"--- DEBUG JWT PAYLOAD: {payload} ---")
+        role = payload.get("user_role")
         user_id = payload.get("user_id")
     except Exception as e:
         print(e)
@@ -249,6 +250,8 @@ async def chat_endpoint(
     try:
         final_state = await app_graph.ainvoke(initial_state)
         print(final_state["final_response"])
+        print(f"DEBUG: Final State keys: {final_state.keys()}")
+        print(f"DEBUG: Route Signal was: {final_state.get('route_signal')}")
         return {"response": final_state["final_response"]}
     except Exception as e:
         print(f"--- API ERROR: {e} ---")

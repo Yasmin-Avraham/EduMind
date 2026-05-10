@@ -71,7 +71,7 @@ async def run_crewai_node(state: EduState):
 
     result = await crew.kickoff_async()
     final_text = result.raw if hasattr(result, 'raw') else str(result)
-
+    print(f"DEBUG: Crew generated text: {final_text[:50]}...")
     return {"final_response": final_text}
 
 def decide_next_step(state: EduState):
