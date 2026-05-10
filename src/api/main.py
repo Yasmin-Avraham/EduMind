@@ -243,14 +243,15 @@ async def chat_endpoint(
         "class_id": request.class_id,
         "user_id": user_id,
         "analysis_result": "",
-        "final_response": ""
+        "final_response": "",
+        "route_signal": ""
     }
     try:
-        final_state = app_graph.invoke(initial_state)
+        final_state = await app_graph.ainvoke(initial_state)
         print(final_state["final_response"])
         return {"response": final_state["final_response"]}
     except Exception as e:
-        print(e)
+        print(f"--- API ERROR: {e} ---")
         raise HTTPException(status_code=500, detail=str(e))
 
 
