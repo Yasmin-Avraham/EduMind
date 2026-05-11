@@ -1,14 +1,14 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Form, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import pandas as pd
 import io
-from fastapi import Form
 from pydantic import BaseModel
 import sqlite3
-from src.config import DB_PATH
+from src.config import DB_PATH, ACCESS_TOKEN_EXPIRE_MINUTES,ALGORITHM, SECRET_KEY
 from typing import Optional
-import jwt
 from src.flows.edu_flow import app_graph
+import jwt
+from datetime import datetime, timedelta
 app = FastAPI(title="EduMind API")
 security = HTTPBearer()
 
@@ -35,6 +35,16 @@ class ChatRequest(BaseModel):
     student_id: Optional[int] = None
     class_id: Optional[str] = None
 
+class LoginRequest(BaseModel):
+    student_id: Optional[int] = None
+    class_id: Optional[str] = None
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 async def get_current_user_role(authorization: str = Header(None)):
     if not authorization:
@@ -50,6 +60,38 @@ async def get_current_user_role(authorization: str = Header(None)):
 def read_root():
     return {"message": "Welcome to EduMind API"}
 
+@app.post("/login", tags=["Login"])
+async def login(request: LoginRequest,response: Response):
+    connection = sqlite3.connect(DB_PATH)
+    cursor = connection.cursor()
+
+    if request.student_id:
+        cursor.execute("SELECT student_id FROM students WHERE student_id = ?", (request.student_id,))
+        user = cursor.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="student id is not found.")
+
+        token = create_access_token({
+            "user_role": "parent",
+            "user_id": request.student_id
+        })
+        response.headers["Authorization"] = f"Bearer {token}"
+        return {"status": "success", "message": "login successfully"}
+
+    elif request.class_id:
+        cursor.execute("SELECT class_id FROM classes WHERE class_id = ?", (request.class_id,))
+        classroom = cursor.fetchone()
+        if not classroom:
+            raise HTTPException(status_code=404, detail="class id is not found.")
+
+        token = create_access_token({
+            "user_role": "teacher",
+            "user_id": request.class_id
+        })
+        response.headers["Authorization"] = f"Bearer {token}"
+        return {"status": "success", "message": "login successfully"}
+
+    raise HTTPException(status_code=400, detail="please provide a valid student id or class id")
 @app.post("/admin/classes", tags=["Admin"])
 async def create_class(class_data: ClassRequest):
     conn = sqlite3.connect(DB_PATH)
