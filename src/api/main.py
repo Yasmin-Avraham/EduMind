@@ -75,8 +75,12 @@ async def login(request: LoginRequest,response: Response):
             "user_role": "parent",
             "user_id": request.student_id
         })
-        response.headers["Authorization"] = f"Bearer {token}"
-        return {"status": "success", "message": "login successfully"}
+        auth_header = f"Bearer {token}"
+        response.headers["Authorization"] = auth_header
+        return {
+            "status": "success",
+            "access_token": auth_header  # הוספנו את זה כאן
+        }
 
     elif request.class_id:
         cursor.execute("SELECT class_id FROM classes WHERE class_id = ?", (request.class_id,))
@@ -88,8 +92,12 @@ async def login(request: LoginRequest,response: Response):
             "user_role": "teacher",
             "user_id": request.class_id
         })
-        response.headers["Authorization"] = f"Bearer {token}"
-        return {"status": "success", "message": "login successfully"}
+        auth_header = f"Bearer {token}"
+        response.headers["Authorization"] = auth_header
+        return {
+            "status": "success",
+            "access_token": auth_header  # הוספנו את זה כאן
+        }
 
     raise HTTPException(status_code=400, detail="please provide a valid student id or class id")
 @app.post("/admin/classes", tags=["Admin"])
