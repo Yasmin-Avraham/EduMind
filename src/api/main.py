@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Form, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 import pandas as pd
 import io
 from pydantic import BaseModel
@@ -275,18 +276,17 @@ async def upload_student_note_txt(
         raise HTTPException(status_code=500, detail=f"error upload the file: {str(e)}")
 @app.post("/chat")
 async def chat_endpoint(
-        request: ChatRequest,
-        auth: HTTPAuthorizationCredentials = Depends(security)
-    ):
+    request: ChatRequest,
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
     token = auth.credentials
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        print(f"--- DEBUG JWT PAYLOAD: {payload} ---")
-        role = payload.get("user_role")
+        role = payload.get("user_role") or payload.get("role") 
         user_id = payload.get("user_id")
     except Exception as e:
-        print(e)
         raise HTTPException(status_code=401, detail="Invalid Token")
+
     initial_state = {
         "query": request.query,
         "user_role": role,
@@ -297,15 +297,21 @@ async def chat_endpoint(
         "final_response": "",
         "route_signal": ""
     }
-    try:
-        final_state = await app_graph.ainvoke(initial_state)
-        print(final_state["final_response"])
-        print(f"DEBUG: Final State keys: {final_state.keys()}")
-        print(f"DEBUG: Route Signal was: {final_state.get('route_signal')}")
-        return {"response": final_state["final_response"]}
-    except Exception as e:
-        print(f"--- API ERROR: {e} ---")
-        raise HTTPException(status_code=500, detail=str(e))
+
+    async def event_generator():
+        try:
+            last_text = ""
+            async for event in app_graph.astream(initial_state, stream_mode="values"):
+                if "final_response" in event and event["final_response"]:
+                    new_text = event["final_response"]
+                    chunk = new_text[len(last_text):]
+                    if chunk:
+                        yield chunk
+                        last_text = new_text
+        except Exception as e:
+            yield f"\n[Error]: {str(e)}"
+
+    return StreamingResponse(event_generator(), media_type="text/plain")
 
 
 

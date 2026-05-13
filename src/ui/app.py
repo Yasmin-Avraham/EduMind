@@ -19,27 +19,21 @@ if "token" not in st.session_state:
                 st.error("Please enter an ID")
             else:
                 role = role_choice.lower()
+                payload = {"student_id": int(user_id_input)} if role == "parent" and user_id_input.isdigit() else {
+                    "class_id": user_id_input}
 
-                if role == "parent":
-                    if user_id_input.isdigit():
-                        payload = {"student_id": int(user_id_input)}
+                try:
+                    res = requests.post("http://localhost:8000/login", json=payload)
+                    if res.status_code == 200:
+                        st.session_state.token = res.headers.get("Authorization") or res.json().get("access_token")
+                        st.session_state.role = role
+                        st.session_state.user_identifier = user_id_input
+                        st.success("Login Successful!")
+                        st.rerun()
                     else:
-                        st.error("Student ID must be a number (numeric only)")
-                        st.stop()
-                else:
-                    payload = {"class_id": user_id_input}
-            try:
-                res = requests.post("http://localhost:8000/login", json=payload)
-                if res.status_code == 200:
-                    st.session_state.token = res.headers.get("Authorization") or res.json().get("access_token")
-                    st.session_state.role = role
-                    st.session_state.user_identifier = user_id_input
-                    st.success("Login Successful!")
-                    st.rerun()
-                else:
-                    st.error("Invalid ID")
-            except Exception as e:
-                st.error(f"Server is down? {e}")
+                        st.error("Invalid ID or Connection Error")
+                except Exception as e:
+                    st.error(f"Server error: {e}")
 
 else:
     with st.sidebar:
@@ -56,7 +50,6 @@ else:
             st.markdown(msg["content"])
 
     if prompt := st.chat_input("How is the student doing?"):
-
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -69,22 +62,27 @@ else:
 
         headers = {"Authorization": st.session_state.token}
 
-        with st.spinner("Talking to AI..."):
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            full_response = ""
+
             try:
-                response = requests.post(
-                    "http://localhost:8000/chat",
-                    json=chat_payload,
-                    headers=headers,
-                    timeout=None
-                )
+                with requests.post(
+                        "http://localhost:8000/chat",
+                        json=chat_payload,
+                        headers=headers,
+                        stream=True,
+                        timeout=None
+                ) as r:
+                    if r.status_code == 200:
+                        for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+                            if chunk:
+                                full_response += chunk
+                                response_placeholder.markdown(full_response + "▌")
 
-                if response.status_code == 200:
-                    answer = response.json().get("response", "No response from AI")
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
-                    with st.chat_message("assistant"):
-                        st.markdown(answer)
-                else:
-                    st.error(f"Server Error: {response.status_code}")
-
-            except requests.exceptions.RequestException as e:
-                st.error(f"Could not connect to FastAPI: {e}")
+                        response_placeholder.markdown(full_response)
+                        st.session_state.messages.append({"role": "assistant", "content": full_response})
+                    else:
+                        st.error(f"Error: {r.status_code}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
