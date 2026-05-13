@@ -49,7 +49,7 @@ else:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("How is the student doing?"):
+    if prompt := st.chat_input("Please ask me a question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)

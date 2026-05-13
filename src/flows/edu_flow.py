@@ -64,8 +64,10 @@ async def run_crewai_node(state: EduState):
     analyst = get_analyst_agent()
     communicator = get_communicator_agent()
 
-    task1 = get_analysis_task(analyst, state["analysis_result"])
-    task2 = get_response_task(communicator, state["query"], state["user_role"])
+    query = state.get("query")
+    context = state.get("analysis_result")
+    task1 = get_analysis_task(analyst,context, query)
+    task2 = get_response_task(communicator,context, state["user_role"],state["query"])
 
     crew = Crew(agents=[analyst, communicator], tasks=[task1, task2], verbose=True)
 
