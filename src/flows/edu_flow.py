@@ -85,6 +85,7 @@ def decide_next_step(state: EduState):
         return "fetch_class"
     return "end"
 
+
 # ==========================================
 # Building the Graph
 # ==========================================
@@ -118,7 +119,6 @@ app_graph = workflow.compile()
 async def main():
     print("--- Starting LangGraph EduMind Simulation ---")
 
-    # מצב התחלתי
     initial_state = {
         "user_role": "parent",
         "student_id": 123456789,

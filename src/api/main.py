@@ -1,17 +1,25 @@
+import json
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends, Form, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 import pandas as pd
 import io
+
+from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 import sqlite3
 from src.config import DB_PATH, ACCESS_TOKEN_EXPIRE_MINUTES,ALGORITHM, SECRET_KEY
 from typing import Optional
 from src.flows.edu_flow import app_graph
+from src.mcp_servers.db_server import get_student_analytics,get_class_analytics
 import jwt
 from datetime import datetime, timedelta
+from src.services.semantic_router import determine_semantic_route
 app = FastAPI(title="EduMind API")
 security = HTTPBearer()
+llm = ChatOllama(model="llama3.2:1b")
+
 
 class ClassRequest(BaseModel):
     class_id: str
@@ -287,15 +295,31 @@ async def chat_endpoint(
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid Token")
 
+    chosen_intent = determine_semantic_route(request.query, role, llm)
+
+    if role == "parent" and chosen_intent == "class_comparison":
+        async def polite_denial_generator():
+            response_msg = "For privacy and data security reasons, I cannot display class-wide metrics or averages. We are happy to help you with anything regarding your specific child—what would you like to know?"
+            yield response_msg
+        return StreamingResponse(polite_denial_generator(), media_type="text/plain")
+    if chosen_intent == "class_comparison":
+        grades_data = get_class_analytics(request.class_id)
+        pass
+    elif chosen_intent == "general_regulations":
+        grades_data = []
+    else:
+        grades_data = get_student_analytics(request.student_id)
+        pass
+
     initial_state = {
         "query": request.query,
         "user_role": role,
         "student_id": request.student_id,
         "class_id": request.class_id,
         "user_id": user_id,
-        "analysis_result": "",
+        "analysis_result": json.dumps(grades_data, ensure_ascii=False),
         "final_response": "",
-        "route_signal": ""
+        "route_signal": chosen_intent
     }
 
     async def event_generator():

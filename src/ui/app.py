@@ -75,9 +75,10 @@ else:
                         timeout=None
                 ) as r:
                     if r.status_code == 200:
-                        for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+                        for chunk in r.iter_content(chunk_size=1024):
                             if chunk:
-                                full_response += chunk
+                                chunk_str = chunk.decode("utf-8", errors="ignore")
+                                full_response += chunk_str
                                 response_placeholder.markdown(full_response + "▌")
 
                         response_placeholder.markdown(full_response)
