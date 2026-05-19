@@ -11,8 +11,8 @@ from langgraph.graph import StateGraph, START, END
 from crewai import Crew
 from src.mcp_servers.db_server import get_student_analytics, get_class_analytics
 from src.config import PARENT_BLOCKED_KEYWORDS
-from src.agents.edu_agents import get_analyst_agent, get_communicator_agent
-from src.agents.edu_tasks import get_analysis_task, get_response_task
+from src.agents.edu_agents import get_analyst_agent, get_communicator_agent, get_strategist_agent
+from src.agents.edu_tasks import get_analysis_task, get_response_task,get_strategy_task
 
 class EduState(TypedDict):
     user_role: str
@@ -62,18 +62,28 @@ async def run_crewai_node(state: EduState):
         return {"final_response": "I couldn't retrieve the necessary data."}
 
     analyst = get_analyst_agent()
+    strategist = get_strategist_agent()
     communicator = get_communicator_agent()
 
     query = state.get("query")
     context = state.get("analysis_result")
-    task1 = get_analysis_task(analyst,context, query)
-    task2 = get_response_task(communicator,context, state["user_role"],state["query"])
 
-    crew = Crew(agents=[analyst, communicator], tasks=[task1, task2], verbose=True)
+
+    task1 = get_analysis_task(analyst, context, query)
+    task2_strategy = get_strategy_task(strategist, query)
+    task3_response = get_response_task(communicator, context, state["user_role"], query)
+
+    crew = Crew(
+        agents=[analyst, strategist, communicator],
+        tasks=[task1, task2_strategy, task3_response],
+        verbose=True
+    )
 
     result = await crew.kickoff_async()
+
     final_text = result.raw if hasattr(result, 'raw') else str(result)
     print(f"DEBUG: Crew generated text: {final_text[:50]}...")
+
     return {"final_response": final_text}
 
 def decide_next_step(state: EduState):

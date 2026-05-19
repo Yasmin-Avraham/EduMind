@@ -29,3 +29,16 @@ def get_communicator_agent():
         allow_delegation=False,
         verbose=True
     )
+
+# 3.The Strategist Agent
+def get_strategist_agent():
+    return Agent(
+        role='Pedagogical Strategist',
+        goal='Design concrete, actionable study recommendations based on academic analysis',
+        backstory='''You are an expert learning specialist and academic coach. 
+        Your expertise is taking academic findings (like a drop in grades) and turning them 
+        into exactly 2 practical, encouraging study tips or next steps for the student.''',
+        llm=MODEL_STR,
+        allow_delegation=False,
+        verbose=True
+    )
